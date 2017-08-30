@@ -166,7 +166,7 @@ void Encoder::selectBestParameters(std::vector<int16_t> &data, unsigned i_dataOf
                                    std::vector<int16_t> &predictions, std::vector<unsigned> &ParCor,
                                    bool b_refFrame)
 {
-    unsigned frameSizes[] = {512, 1024, 2048, 3072, 4096};
+    unsigned frameSizes[] = {256, 512, 768, 1024, 1792, 2048};
     //unsigned frameSizes[] = {512, 1024, 1536, 2048, 2560, 3072, 3584, 4096};
 
     float i_lastSizePerSample = 0;
