@@ -129,6 +129,14 @@ uint16_t Encoder::calculateBParameter(std::vector<int16_t> codes)
 }
 
 
+inline float exp1(float x) {
+  x = 1.f + x / 256.f;
+  x *= x; x *= x; x *= x; x *= x;
+  x *= x; x *= x; x *= x; x *= x;
+  return x;
+}
+
+
 void Encoder::buildRangeCoderDistribution(int i_codeMin, int i_codeMax, uint32_t freqs[], uint16_t b,
                                           unsigned i_log2TotalFreq)
 {
@@ -142,7 +150,7 @@ void Encoder::buildRangeCoderDistribution(int i_codeMin, int i_codeMax, uint32_t
     float sum = 0;
     for (int i = i_codeMin; i <= i_codeMax; ++i)
     {
-        float p = 1.f / (2.f * b) * std::exp(-std::fabs(i) / b);
+        float p = 1.f / (2.f * b) * exp1(-std::fabs(i) / b);
         pf_freqs[i - i_codeMin] = p;
         sum += p;
     }
@@ -166,7 +174,8 @@ void Encoder::selectBestParameters(std::vector<int16_t> &data, unsigned i_dataOf
                                    std::vector<int16_t> &predictions, std::vector<unsigned> &ParCor,
                                    bool b_refFrame)
 {
-    unsigned frameSizes[] = {256, 512, 768, 1024, 1792, 2048};
+    unsigned frameSizes[] = {128, 256, 384, 512, 640, 768, 896, 1024, 1152, 1280, 1408, 1536, 1664, 1792, 1920, 2048};
+    //unsigned frameSizes[] = {128, 256, 384, 512, 640, 768, 896, 1024};
     //unsigned frameSizes[] = {512, 1024, 1536, 2048, 2560, 3072, 3584, 4096};
 
     float i_lastSizePerSample = 0;
@@ -190,22 +199,29 @@ void Encoder::selectBestParameters(std::vector<int16_t> &data, unsigned i_dataOf
             else
                 calculateLPCcoeffs(data, i_dataOffset, i_frameSize, newLPCCoeff, newParCor);
 
-    #if 0
+#if 0
             std::cout << "  LPC coefs" << std::endl;
             for (unsigned i = 0; i < newLPCCoeff.size(); ++i)
                 std::cout << i << ": " << newLPCCoeff[i] << std::endl;
-    #endif
+#endif
+
+            float error = 0;
 
             if (b_refFrame)
             {
                 if (i_frameSize > 1)
-                    newPredictions.push_back(data[i_dataOffset + 1] - data[i_dataOffset]);
+                {
+                    int16_t predErr = data[i_dataOffset + 1] - data[i_dataOffset];
+                    newPredictions.push_back(predErr);
+                    error += predErr * predErr;
+                }
 
                 for (unsigned i = 2; i < i_frameSize && i < newLPCCoeff.size(); ++i)
                 {
                     int16_t pred = 2 * data[i_dataOffset + i - 1] - data[i_dataOffset + i - 2];
                     int16_t predErr = data[i_dataOffset + i] - pred;
                     newPredictions.push_back(predErr);
+                    error += predErr * predErr;
                 }
             }
 
@@ -219,6 +235,7 @@ void Encoder::selectBestParameters(std::vector<int16_t> &data, unsigned i_dataOf
 
                 int16_t predErr = data[i_dataOffset + i] - pred;
                 newPredictions.push_back(predErr);
+                error += predErr * predErr;
             }
 
             // Find the min and max.
@@ -231,19 +248,25 @@ void Encoder::selectBestParameters(std::vector<int16_t> &data, unsigned i_dataOf
             const unsigned i_nbSymbols = i_codeMax - i_codeMin + 1;
             const unsigned i_log2TotalFreq = 20;
 
-            int16_t b = calculateBParameter(newPredictions);
+            //int16_t b = calculateBParameter(newPredictions);
 
-            uint32_t freqs[i_nbSymbols];
-            buildRangeCoderDistribution(i_codeMin, i_codeMax, freqs, b, i_log2TotalFreq);
+            //uint32_t freqs[i_nbSymbols];
+            //buildRangeCoderDistribution(i_codeMin, i_codeMax, freqs, b, i_log2TotalFreq);
 
 
-            float i_sizePerSample = (float)estimateFrameSize(order, i_frameSize, freqs, i_nbSymbols, i_log2TotalFreq) / i_frameSize;
+            //float i_sizePerSample = (float)estimateFrameSize(order, i_frameSize, freqs, i_nbSymbols, i_log2TotalFreq) / i_frameSize;
+            error = 0.5f * std::log2(0.5f / i_frameSize * error) * i_frameSize / 8.f;
+            error += ceilf(order * NB_QUANT_BITS / 8.f);
+            error += 8;
+            error /= i_frameSize;
 
-            if (i == 0 && order == 1 || i_sizePerSample < i_lastSizePerSample)
+            //if (i == 0 && order == 1 || i_sizePerSample < i_lastSizePerSample)
+            if (i == 0 && order == 1 || error < i_lastSizePerSample)
             {
                 predictions = newPredictions;
                 ParCor = newParCor;
-                i_lastSizePerSample = i_sizePerSample;
+                //i_lastSizePerSample = i_sizePerSample;
+                i_lastSizePerSample = error;
                 i_lastOrder = order;
                 i_selectedFrameSize = i_frameSize;
             }
@@ -274,7 +297,7 @@ float Encoder::computeShanonEntropy(u_int32_t *freqs, unsigned i_nbSymbols,
     for (unsigned i = 0; i < i_nbSymbols; ++i)
     {
         float p = (float)freqs[i] / i_totalFreq;
-        entropy -= p * logf(p) / logf(2.f);
+        entropy -= p * std::log2(p);
     }
 
     return entropy;
@@ -340,7 +363,11 @@ void Encoder::calculateLPCcoeffs(std::vector<int16_t> &data, unsigned i_dataOffs
     }
 
     // ASSIGN COEFFICIENTS
-    coeffs.assign( ++Ak.begin(), Ak.end() );
+    coeffs.assign(++Ak.begin(), Ak.end());
+
+    /*std::cout << "--------" << std::endl;
+    for (unsigned i = 0; i<coeffs.size(); ++i)
+        std::cout << coeffs[i] << std::endl;*/
 }
 
 
