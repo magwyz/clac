@@ -1,21 +1,5 @@
-/*****************************************************************************
-* Copyright (C) 2012 Adrien Maglo
-*
-* This file is part of RangeCoder.
-*
-* RangeCoder is free software: you can redistribute it and/or modify
-* it under the terms of the GNU Lesser General Public License as published by
-* the Free Software Foundation, either version 3 of the License, or
-* (at your option) any later version.
-*
-* RangeCoder is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU Lesser General Public License for more details.
-*
-* You should have received a copy of the GNU Lesser General Public License
-* along with RangeCoder.  If not, see <http://www.gnu.org/licenses/>.
-*****************************************************************************/
+#ifndef RANGECODER_H
+#define RANGECODER_H
 
 #include <stdint.h>
 
@@ -70,7 +54,7 @@ unsigned stopEncoding(RangeCoder *rc);
   * @param i_symbolCumFreq the cumulative frequency of the symbol we want to encode.
   */
 void encodeFrequency(RangeCoder *rc, unsigned i_log2TotFreq,
-                     unsigned i_symbolFreq, unsigned i_symbolCumFreq);
+                     unsigned i_symbolFreq, uint64_t i_symbolCumFreq);
 
 
 /**
@@ -134,7 +118,7 @@ uint64_t decodeCumFreq(RangeCoder *rc, unsigned i_log2TotFreq);
   * @param i_symbolCumFreq the cumulative frequency of the symbol that has just been decoded.
   */
 void updateAfterDecoding(RangeCoder *rc, unsigned i_log2TotFreq,
-                         unsigned i_symbolFreq, unsigned i_symbolCumFreq);
+                         unsigned i_symbolFreq, uint64_t i_symbolCumFreq);
 
 
 /**
@@ -144,3 +128,14 @@ void updateAfterDecoding(RangeCoder *rc, unsigned i_log2TotFreq,
   * @param data the bits to write.
   */
 void writeBits(RangeCoder *rc, unsigned i_nbBits, uint64_t data);
+
+
+/**
+  * Read bits in the stream.
+  * @param rc a pointer on the range coder structure.
+  * @param i_nbBits the number of bits to read.
+  * @return the read data.
+  */
+uint64_t readBits(RangeCoder *rc, unsigned i_nbBits);
+
+#endif

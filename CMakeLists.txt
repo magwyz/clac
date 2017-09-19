@@ -3,6 +3,8 @@ project(Fingerprint)
 
 set(SOURCES src/main.cpp
             src/encoder.cpp
+            src/decoder.cpp
+            src/parcorgenerator.cpp
             src/rangeCoder/rangeCoder.c
             src/rangeCoder/staticModel.c
             src/rangeCoder/quasiStaticModel.c
@@ -10,6 +12,8 @@ set(SOURCES src/main.cpp
 
 set(HEADERS include/main.hpp
             include/encoder.h
+            include/decoder.h
+            include/parcorgenerator.h
             include/rangeCoder/rangeCoder.h
             include/rangeCoder/staticModel.h
             include/rangeCoder/quasiStaticModel.h

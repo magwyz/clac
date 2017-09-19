@@ -50,14 +50,14 @@ unsigned stopEncoding(RangeCoder *rc)
 
 
 void encodeFrequency(RangeCoder *rc, unsigned i_log2TotFreq,
-                     unsigned i_symbolFreq, unsigned i_symbolCumFreq)
+                     unsigned i_symbolFreq, uint64_t i_symbolCumFreq)
 {
     writeAndShiftBits(rc, i_log2TotFreq - rc->i_nbBitsShift);
 
     rc->i_message <<= i_log2TotFreq - rc->i_nbBitsShift;
     rc->i_message += i_symbolCumFreq * rc->i_prodFreq;
 
-    uint64_t i_mask = 0xffffffff >> (MESSAGE_BIT_LENGTH - i_log2TotFreq);
+    uint64_t i_mask = 0xffffffffffffffff >> (MESSAGE_BIT_LENGTH - i_log2TotFreq);
     rc->i_prodFreq = safeProduct(rc, rc->i_prodFreq, i_symbolFreq, i_mask);
 }
 
@@ -145,11 +145,11 @@ uint64_t decodeCumFreq(RangeCoder *rc, unsigned i_log2TotFreq)
 
 
 void updateAfterDecoding(RangeCoder *rc, unsigned i_log2TotFreq,
-                         unsigned i_symbolFreq, unsigned i_symbolCumFreq)
+                         unsigned i_symbolFreq, uint64_t i_symbolCumFreq)
 {
     rc->i_message -= i_symbolCumFreq * rc->i_prodFreq;
 
-    uint64_t i_mask = 0xffffffff >> (MESSAGE_BIT_LENGTH - i_log2TotFreq);
+    uint64_t i_mask = 0xffffffffffffffff >> (MESSAGE_BIT_LENGTH - i_log2TotFreq);
     rc->i_prodFreq = safeProduct(rc, rc->i_prodFreq, i_symbolFreq, i_mask);
 }
 
@@ -157,4 +157,12 @@ void updateAfterDecoding(RangeCoder *rc, unsigned i_log2TotFreq,
 void writeBits(RangeCoder *rc, unsigned i_nbBits, uint64_t data)
 {
     encodeFrequency(rc, i_nbBits, 1, data);
+}
+
+
+uint64_t readBits(RangeCoder *rc, unsigned i_nbBits)
+{
+    uint64_t ret = decodeCumFreq(rc, i_nbBits);
+    updateAfterDecoding(rc, i_nbBits, 1, ret);
+    return ret;
 }

@@ -11,10 +11,9 @@ extern "C" {
 #include <rangeCoder/quasiStaticModel.h>
 }
 
-#define MAX_FRAME_SIZE (100 * 1024)
+#include "parcorgenerator.h"
 
-#define NB_QUANT_BITS 10
-#define QUANT_HALF_INTERVAL 1.f
+#define MAX_FRAME_SIZE (100 * 1024)
 
 
 class Encoder
@@ -27,8 +26,6 @@ private:
     int getFrameCompressedData(std::vector<int16_t> &data, unsigned i_dataOffset, unsigned &i_selectedFrameSize,
                                char *p_buffer, unsigned &i_size, bool b_refFrame);
 
-    void calculateLPCcoeffs(std::vector<int16_t> &autoc, unsigned i_dataOffset, unsigned i_dataSize,
-                            std::vector<float> &coeffs, std::vector<unsigned> &parCor);
     uint16_t calculateBParameter(std::vector<int16_t> codes);
     void buildRangeCoderDistribution(int i_codeMin, int i_codeMax, uint32_t freqs[], uint16_t b,
                                      unsigned i_log2TotalFreq);
@@ -41,8 +38,7 @@ private:
                                unsigned i_nbSymbols, unsigned i_log2TotalFreq);
     float computeShanonEntropy(u_int32_t *freqs, unsigned i_nbSymbols, unsigned i_log2TotalFreq);
 
-    unsigned quantizeParCor(float parcor, unsigned i_order);
-    float getParCor(int quantizedParCor, unsigned i_order);
+    ParCorGenerator pcg;
 };
 
 #endif // ENCODER_H
