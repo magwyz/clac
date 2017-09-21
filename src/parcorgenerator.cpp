@@ -66,10 +66,35 @@ void ParCorGenerator::calculateLPCcoeffs(std::vector<int16_t> &data, unsigned i_
 
     // ASSIGN COEFFICIENTS
     coeffs.assign(++Ak.begin(), Ak.end());
+}
 
-    /*std::cout << "--------" << std::endl;
-    for (unsigned i = 0; i<coeffs.size(); ++i)
-        std::cout << coeffs[i] << std::endl;*/
+
+void ParCorGenerator::getLPCcoeffsFromParCor(std::vector<unsigned> &parCor, std::vector<float> &coeffs)
+{
+    // GET SIZE FROM INPUT VECTORS
+    size_t m = parCor.size();
+
+    // INITIALIZE Ak
+    std::vector<float> Ak(m + 1, 0.0);
+    Ak[0] = 1.0;
+
+    // LEVINSON-DURBIN RECURSION
+    for (size_t k = 0; k < m; k++)
+    {
+        // COMPUTE LAMBDA (PARCOR)
+        float lambda = getParCor(parCor[k], k + 1);
+
+        // UPDATE Ak
+        for (size_t n = 0; n <= (k + 1) / 2; n++)
+        {
+            double temp = Ak[k + 1 - n] + lambda * Ak[n];
+            Ak[n] = Ak[n] + lambda * Ak[k + 1 - n];
+            Ak[k + 1 - n] = temp;
+        }
+    }
+
+    // ASSIGN COEFFICIENTS
+    coeffs.assign(++Ak.begin(), Ak.end());
 }
 
 

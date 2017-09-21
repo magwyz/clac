@@ -17,6 +17,7 @@
 * along with RangeCoder.  If not, see <http://www.gnu.org/licenses/>.
 *****************************************************************************/
 
+#include <stdio.h>
 #include "rangeCoder.h"
 
 
@@ -71,6 +72,7 @@ void writeAndShiftBits(RangeCoder *rc, unsigned i_nbBits)
         // Set to 1 the current bit if needed.
         if (((rc->i_message >> c_shift) & 1) > 0)
             rc->p_data[rc->i_dataOffset] |= rc->c_bitMask;
+
         c_shift--;
 
         // This test is to not write the leading zeros.

@@ -6,6 +6,7 @@ class WavParameters
 public:
     unsigned i_sampleRate;
     unsigned i_nbChannels;
+    unsigned i_bitsPerSamples;
 };
 
 

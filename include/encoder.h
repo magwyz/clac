@@ -27,8 +27,6 @@ private:
                                char *p_buffer, unsigned &i_size, bool b_refFrame);
 
     uint16_t calculateBParameter(std::vector<int16_t> codes);
-    void buildRangeCoderDistribution(int i_codeMin, int i_codeMax, uint32_t freqs[], uint16_t b,
-                                     unsigned i_log2TotalFreq);
 
     unsigned findBestShift(std::vector<int16_t> &data, unsigned i_dataOffset, unsigned i_dataSize);
     void selectBestParameters(std::vector<int16_t> &data, unsigned i_dataOffset, unsigned &i_selectedFrameSize,

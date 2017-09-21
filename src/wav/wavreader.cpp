@@ -1,4 +1,6 @@
 
+#include <assert.h>
+
 #include <wavreader.h>
 
 
@@ -20,8 +22,8 @@ bool WavReader::open(std::string path)
 
 bool WavReader::readHeader(WavParameters& p)
 {
-    u_int32_t data32;
-    u_int16_t data16;
+    uint32_t data32;
+    uint16_t data16;
 
     /* TODO: check each the file descriptor status after each read operation
      * with a macro. */
@@ -51,7 +53,9 @@ bool WavReader::readHeader(WavParameters& p)
 
     ifs.read((char*)&data16, sizeof(data16)); // NumChannels
     ifs.read((char*)&data32, sizeof(data32)); // SampleRate
+
     ifs.read((char*)&data32, sizeof(data32)); // ByteRate
+
     ifs.read((char*)&data16, sizeof(data16)); // BlockAlign
     ifs.read((char*)&data16, sizeof(data16)); // BitsPerSample
 

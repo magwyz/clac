@@ -2,6 +2,8 @@
 #define DECODER_H
 
 #include <vector>
+#include <parcorgenerator.h>
+#include <stdint.h>
 
 
 extern "C" {
@@ -13,7 +15,12 @@ extern "C" {
 class Decoder
 {
 public:
-    int decodeFrame(char *p_buffer, size_t offset, std::vector<int16_t> decodedFrameData);
+    int decodeFrame(char *p_buffer, size_t &offset, std::vector<int16_t> &decodedFrameData);
+    int16_t getNextPrediction(RangeCoder *rc, QuasiStaticModel *qsm,
+                              const unsigned i_log2TotalFreq, const int i_codeMin, int i_test);
+
+private:
+    ParCorGenerator pcg;
 };
 
 

@@ -5,7 +5,7 @@
 #include <vector>
 
 
-#define NB_QUANT_BITS 10
+#define NB_QUANT_BITS 9
 #define QUANT_HALF_INTERVAL 1.f
 
 
@@ -14,6 +14,7 @@ class ParCorGenerator
 public:
     void calculateLPCcoeffs(std::vector<int16_t> &autoc, unsigned i_dataOffset, unsigned i_dataSize,
                             std::vector<float> &coeffs, std::vector<unsigned> &parCor);
+    void getLPCcoeffsFromParCor(std::vector<unsigned> &parCor, std::vector<float> &coeffs);
     unsigned quantizeParCor(float parcor, unsigned i_order);
     float getParCor(int quantizedParCor, unsigned i_order);
 };

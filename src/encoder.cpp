@@ -8,6 +8,8 @@
 #include <cstring>
 
 #include <encoder.h>
+#include <codec.h>
+#include <distribution.h>
 
 
 int Encoder::encodeFrame(std::vector<int16_t> &data, unsigned i_dataOffset, unsigned &i_selectedFrameSize,
@@ -44,29 +46,12 @@ int Encoder::getFrameCompressedData(std::vector<int16_t> &data, unsigned i_dataO
         i_codeMax = i_codeMin + 1;
 
     const unsigned i_nbSymbols = i_codeMax - i_codeMin + 1;
-    const unsigned i_log2TotalFreq = 20;
+    const unsigned i_log2TotalFreq = 19;
 
     int16_t b = calculateBParameter(codes);
 
-    uint32_t freqs[i_nbSymbols];
-    buildRangeCoderDistribution(i_codeMin, i_codeMax, freqs, b, i_log2TotalFreq);
-
-#if 0
-    // Distribution vizualization
-    std::ofstream ofsFreq;
-
-    std::stringstream ssFreq;
-    static unsigned dis_id = 0;
-    ssFreq << "distribution_" << dis_id++ << ".dat";
-
-    ofsFreq.open(ssFreq.str());
-    assert(ofsFreq.good());
-
-    for (int i = 0; i < i_nbSymbols; ++i)
-        ofsFreq << freqs[i]  << "," << hist[i + i_codeMin] << std::endl;
-
-    ofsFreq.close();
-#endif
+    Distribution dist(i_codeMin, i_codeMax, b, i_log2TotalFreq);
+    uint32_t *freqs = dist.getFreqs();
 
     RangeCoder* rc = (RangeCoder*)malloc(sizeof(RangeCoder));
     QuasiStaticModel* qsm = createQuasiStaticModel(i_nbSymbols, i_log2TotalFreq,
@@ -75,14 +60,17 @@ int Encoder::getFrameCompressedData(std::vector<int16_t> &data, unsigned i_dataO
     startEncoding(rc, (unsigned char*)p_buffer);
 
     // Write the frame header.
-    writeBits(rc, 16, 0b1111111111111110);
+    writeBits(rc, 16, 65534);
 
     // Write the b parameter.
-    writeBits(rc, 15, b);
+    assert(b < (1 << 13));
+    writeBits(rc, 13, b);
 
     // Write the code min and max.
-    writeBits(rc, 15, i_codeMin + (1 << 14));
-    writeBits(rc, 15, i_codeMax + (1 << 14));
+    assert(i_codeMin + (1 << 15) < (1 << 16));
+    writeBits(rc, 16, i_codeMin + (1 << 15));
+    assert(i_codeMax + (1 << 15) < (1 << 16));
+    writeBits(rc, 16, i_codeMax + (1 << 15));
 
     // Write the predictor order.
     writeBits(rc, 4, parCor.size() - 1);
@@ -91,9 +79,31 @@ int Encoder::getFrameCompressedData(std::vector<int16_t> &data, unsigned i_dataO
     for (unsigned i = 0; i < parCor.size(); ++i)
         writeBits(rc, NB_QUANT_BITS, parCor[i]);
 
+    // Write the frame size
+    int i_frameSizeId = getFrameSizeId(i_selectedFrameSize);
+    if (i_frameSizeId >= 0)
+    {
+        // Standard frame size.
+        writeBits(rc, 1, 0);
+        assert(i_frameSizeId < 16);
+        writeBits(rc, 4, i_frameSizeId);
+    }
+    else
+    {
+        // Custom frame size.
+        writeBits(rc, 1, 0);
+        assert(i_selectedFrameSize < (1 << 12));
+        writeBits(rc, 11, i_selectedFrameSize);
+    }
+
     // Write the value of the first sample.
     if (b_refFrame)
+    {
+        writeBits(rc, 1, 1);
         writeBits(rc, 16, data[i_dataOffset] + (1 << 15));
+    }
+    else
+        writeBits(rc, 1, 0);
 
     for (unsigned i = 0; i < codes.size(); ++i)
     {
@@ -104,7 +114,6 @@ int Encoder::getFrameCompressedData(std::vector<int16_t> &data, unsigned i_dataO
         assert(symb < (int32_t)i_nbSymbols);
         getSymbolFrequenciesQSM(qsm, symb, &i_freq, &i_cumFreq);
         encodeFrequency(rc, i_log2TotalFreq, i_freq, i_cumFreq);
-        //updateQSM(qsm, symb);
     }
 
     i_size = stopEncoding(rc);
@@ -127,59 +136,12 @@ uint16_t Encoder::calculateBParameter(std::vector<int16_t> codes)
 }
 
 
-inline float exp1(float x) {
-  x = 1.f + x / 256.f;
-  x *= x; x *= x; x *= x; x *= x;
-  x *= x; x *= x; x *= x; x *= x;
-  return x;
-}
-
-
-void Encoder::buildRangeCoderDistribution(int i_codeMin, int i_codeMax, uint32_t freqs[], uint16_t b,
-                                          unsigned i_log2TotalFreq)
-{
-    const unsigned i_nbSymbols = i_codeMax - i_codeMin + 1;
-    const unsigned i_totalFreq = 1 << i_log2TotalFreq;
-
-    float pf_freqs[i_nbSymbols];
-
-    const unsigned i_nbFreqToAssign = i_totalFreq - 1 * i_nbSymbols;
-
-    float sum = 0;
-    for (int i = i_codeMin; i <= i_codeMax; ++i)
-    {
-        float p = 1.f / (2.f * b) * exp1(-std::fabs(i) / b);
-        pf_freqs[i - i_codeMin] = p;
-        sum += p;
-    }
-
-    float alpha = i_nbFreqToAssign / sum;
-
-    unsigned sum2 = 0;
-    for (unsigned i = 0; i < i_nbSymbols; ++i)
-    {
-        freqs[i] = 1 + floorf(pf_freqs[i] * alpha);
-        sum2 += freqs[i];
-    }
-
-    unsigned i_missingCount = i_totalFreq - sum2;
-    for (unsigned i = 0; i < i_missingCount; ++i)
-        freqs[i]++;
-}
-
-
 void Encoder::selectBestParameters(std::vector<int16_t> &data, unsigned i_dataOffset, unsigned &i_selectedFrameSize,
                                    std::vector<int16_t> &predictions, std::vector<unsigned> &ParCor,
                                    bool b_refFrame)
 {
-    //unsigned frameSizes[] = {128, 256, 384, 512, 640, 768, 896, 1024, 1152, 1280, 1408, 1536, 1664, 1792, 1920, 2048};
-    unsigned frameSizes[] = {128, 256, 384, 512, 640, 768, 896, 1024};
-    //unsigned frameSizes[] = {512, 1024, 1536, 2048, 2560, 3072, 3584, 4096};
-
     float i_lastSizePerSample = 0;
     unsigned i_lastOrder = 0;
-
-    const unsigned i_nbFrameSizes = sizeof(frameSizes) / sizeof(*frameSizes);
 
     for (unsigned i = 0; i < i_nbFrameSizes; ++i)
     {
@@ -236,23 +198,6 @@ void Encoder::selectBestParameters(std::vector<int16_t> &data, unsigned i_dataOf
                 error += predErr * predErr;
             }
 
-            // Find the min and max.
-            int i_codeMin = *std::min_element(newPredictions.begin(), newPredictions.end());
-            int i_codeMax = *std::max_element(newPredictions.begin(), newPredictions.end());
-
-            if (i_codeMin == i_codeMax) // We must have at least two symbols for the range coder model.
-                i_codeMax = i_codeMin + 1;
-
-            const unsigned i_nbSymbols = i_codeMax - i_codeMin + 1;
-            const unsigned i_log2TotalFreq = 20;
-
-            //int16_t b = calculateBParameter(newPredictions);
-
-            //uint32_t freqs[i_nbSymbols];
-            //buildRangeCoderDistribution(i_codeMin, i_codeMax, freqs, b, i_log2TotalFreq);
-
-
-            //float i_sizePerSample = (float)estimateFrameSize(order, i_frameSize, freqs, i_nbSymbols, i_log2TotalFreq) / i_frameSize;
             error = 0.5f * std::log2(0.5f / i_frameSize * error) * i_frameSize / 8.f;
             error += ceilf(order * NB_QUANT_BITS / 8.f);
             error += 8;

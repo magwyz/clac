@@ -7,6 +7,7 @@
 
 #include <main.hpp>
 #include <wavreader.h>
+#include <wavwriter.h>
 
 #include <encoder.h>
 #include <decoder.h>
@@ -20,6 +21,8 @@ void printUsage();
 int main(int argc, char* argv[])
 {
     bool b_ret;
+
+    std::cout << "💩 CLAC: Crappy Lossless Audio Codec 💩" << std::endl;
 
     if (argc != 4)
     {
@@ -44,41 +47,6 @@ int main(int argc, char* argv[])
         printUsage();
         return 1;
     }
-
-
-#if 0
-    rc = (RangeCoder*)malloc(sizeof(RangeCoder));
-    qsm = createQuasiStaticModel(i_nbSymbols, i_log2TotalFreq,
-                                1 << (i_log2TotalFreq - 1), NULL);
-
-    startDecoding(rc, p_data);
-    printf("Decoded data:\n");
-
-    for (unsigned i = 0; i < codes.size(); ++i)
-    {
-        uint32_t i_cumFreqDec = decodeCumFreq(rc, i_log2TotalFreq);
-
-        unsigned i_sym = getSymbolFromCumFreqQSM(qsm, i_cumFreqDec);
-        int16_t c = i_sym + i_codeMin;
-
-        if (c != codes[i])
-        {
-            std::cout << i << ": " << c << " " << codes[i] << std::endl;
-            abort();
-        }
-
-        unsigned i_freq, i_cumFreq;
-        getSymbolFrequenciesQSM(qsm, i_sym, &i_freq, &i_cumFreq);
-        updateAfterDecoding(rc, i_log2TotalFreq, i_freq, i_cumFreq);
-        updateQSM(qsm, i_sym);
-    }
-
-    unsigned i_nbSamples = stopDecoding(rc);
-    printf("Data size: %u\n", i_nbSamples);
-
-    deleteQuasiStaticModel(qsm);
-    free(rc);
-#endif
 
     return 0;
 }
@@ -122,7 +90,7 @@ int encode(std::string inPath, std::string outPath)
 
     while (i_frameStart < ad.size())
     {
-        char p_frameData[MAX_FRAME_SIZE];
+        char p_frameData[MAX_FRAME_SIZE] = {0};
         unsigned i_frameCompressedSize;
         unsigned i_frameSizeSelected;
         bool b_refFrame = i_frameStart - i_lastRefFrame >= 48000
@@ -172,7 +140,41 @@ int decode(std::string inPath, std::string outPath)
 
     std::vector<int16_t> decodedFrameData;
 
-    dec.decodeFrame(p_buffer, offset, decodedFrameData);
+    unsigned i = 0;
+    while (offset < fileSize)
+    {
+        std::cout << (float)offset / fileSize * 100.f << "%" << std::endl;
+        int ret = dec.decodeFrame(p_buffer, offset, decodedFrameData);
+        if (ret)
+            abort();
+    }
+
+    WavWriter writer;
+    bool b_ret = writer.open(outPath);
+    if (!b_ret)
+    {
+        std::cout << "Error opening the output Wav file." << std::endl;
+        return 1;
+    }
+
+    WavParameters p;
+    p.i_bitsPerSamples = 16;
+    p.i_nbChannels = 1;
+    p.i_sampleRate = 44100;
+
+    b_ret = writer.writeHeader(p, decodedFrameData.size() * 2);
+    if (!b_ret)
+    {
+        std::cout << "Error writing the Wav header of the output file." << std::endl;
+        return 1;
+    }
+
+    b_ret = writer.writeAudioData(decodedFrameData, p);
+    if (!b_ret)
+    {
+        std::cout << "Error writing the Wav audio data of the output file." << std::endl;
+        return 1;
+    }
 
     return 0;
 }

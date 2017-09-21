@@ -16,3 +16,8 @@ src/decoder.cpp
 include/decoder.h
 src/parcorgenerator.cpp
 include/parcorgenerator.h
+include/codec.h
+src/distribution.cpp
+include/distribution.h
+src/wav/wavwriter.cpp
+include/wav/wavwriter.h
