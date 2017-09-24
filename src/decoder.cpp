@@ -24,8 +24,8 @@ int Decoder::decodeFrame(char *p_buffer, size_t &offset, std::vector<int16_t> &d
 
     int16_t b = readBits(rc, 13);
 
-    const int i_codeMin = (int64_t)readBits(rc, 16) - (1 << 15);
-    const int i_codeMax = (int64_t)readBits(rc, 16) - (1 << 15);
+    const int i_codeMin = (int64_t)(readBits(rc, 8) << 8) - (1 << 15);
+    const int i_codeMax = (int64_t)(readBits(rc, 8) << 8) - (1 << 15);
     const unsigned i_nbSymbols = i_codeMax - i_codeMin + 1;
 
     // Read the predictor order.

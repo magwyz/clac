@@ -6,6 +6,7 @@
 #include <random>
 #include <future>
 #include <cstring>
+#include <map>
 
 #include <encoder.h>
 #include <codec.h>
@@ -39,8 +40,8 @@ int Encoder::getFrameCompressedData(std::vector<int16_t> &data, unsigned i_dataO
     // TODO: Get this data from the previous function.
 
     // Find the min and max.
-    int64_t i_codeMin = *std::min_element(codes.begin(), codes.end());
-    int64_t i_codeMax = *std::max_element(codes.begin(), codes.end());
+    int64_t i_codeMin = std::floor(*std::min_element(codes.begin(), codes.end()) / 256.f) * 256;
+    int64_t i_codeMax = std::ceil(*std::max_element(codes.begin(), codes.end()) / 256.f) * 256;
 
     if (i_codeMin == i_codeMax) // We must have at least two symbols for the range coder model.
         i_codeMax = i_codeMin + 1;
@@ -49,6 +50,8 @@ int Encoder::getFrameCompressedData(std::vector<int16_t> &data, unsigned i_dataO
     const unsigned i_log2TotalFreq = 19;
 
     int16_t b = calculateBParameter(codes);
+
+    //exportCodeDistribution(codes);
 
     Distribution dist(i_codeMin, i_codeMax, b, i_log2TotalFreq);
     uint32_t *freqs = dist.getFreqs();
@@ -68,9 +71,9 @@ int Encoder::getFrameCompressedData(std::vector<int16_t> &data, unsigned i_dataO
 
     // Write the code min and max.
     assert(i_codeMin + (1 << 15) < (1 << 16));
-    writeBits(rc, 16, i_codeMin + (1 << 15));
+    writeBits(rc, 8, (i_codeMin + (1 << 15)) >> 8);
     assert(i_codeMax + (1 << 15) < (1 << 16));
-    writeBits(rc, 16, i_codeMax + (1 << 15));
+    writeBits(rc, 8, (i_codeMax + (1 << 15)) >> 8);
 
     // Write the predictor order.
     writeBits(rc, 4, parCor.size() - 1);
@@ -159,12 +162,6 @@ void Encoder::selectBestParameters(std::vector<int16_t> &data, unsigned i_dataOf
             else
                 pcg.calculateLPCcoeffs(data, i_dataOffset, i_frameSize, newLPCCoeff, newParCor);
 
-#if 0
-            std::cout << "  LPC coefs" << std::endl;
-            for (unsigned i = 0; i < newLPCCoeff.size(); ++i)
-                std::cout << i << ": " << newLPCCoeff[i] << std::endl;
-#endif
-
             float error = 0;
 
             if (b_refFrame)
@@ -220,28 +217,27 @@ void Encoder::selectBestParameters(std::vector<int16_t> &data, unsigned i_dataOf
 }
 
 
-unsigned Encoder::estimateFrameSize(unsigned i_predictionOrder, unsigned i_frameSize, u_int32_t *freqs,
-                                    unsigned i_nbSymbols, unsigned i_log2TotalFreq)
+void Encoder::exportCodeDistribution(std::vector<int16_t> &codes)
 {
-    unsigned codesSize = ceilf(computeShanonEntropy(freqs, i_nbSymbols, i_log2TotalFreq) * i_frameSize / 8.f);
-    unsigned predictorSize = ceilf(i_predictionOrder * NB_QUANT_BITS / 8.f);
-    unsigned headerSize = 8;
+    // Distribution vizualization
 
-    return codesSize + predictorSize + headerSize;
-}
+    static unsigned dis_id = 0;
 
+    std::ofstream ofsFreq;
+    std::stringstream ssFreq;
+    ssFreq << "distribution_" << dis_id << ".dat";
 
-float Encoder::computeShanonEntropy(u_int32_t *freqs, unsigned i_nbSymbols,
-                                    unsigned i_log2TotalFreq)
-{
-    unsigned i_totalFreq = 1 << i_log2TotalFreq;
-    float entropy = 0;
+    std::map<int, unsigned> hist;
+    for (unsigned i = 0; i < codes.size(); ++i)
+        hist[codes[i]]++;
 
-    for (unsigned i = 0; i < i_nbSymbols; ++i)
-    {
-        float p = (float)freqs[i] / i_totalFreq;
-        entropy -= p * std::log2(p);
-    }
+    ofsFreq.open(ssFreq.str());
 
-    return entropy;
+    for (std::map<int, unsigned>::const_iterator it = hist.begin();
+         it != hist.end(); ++it)
+        ofsFreq << it->first  << "," << it->second << std::endl;
+
+    ofsFreq.close();
+
+    dis_id++;
 }

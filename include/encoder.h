@@ -32,9 +32,7 @@ private:
     void selectBestParameters(std::vector<int16_t> &data, unsigned i_dataOffset, unsigned &i_selectedFrameSize,
                               std::vector<int16_t> &predictions, std::vector<unsigned> &ParCor,
                               bool b_refFrame);
-    unsigned estimateFrameSize(unsigned i_predictionOrder, unsigned i_frameSize, u_int32_t *freqs,
-                               unsigned i_nbSymbols, unsigned i_log2TotalFreq);
-    float computeShanonEntropy(u_int32_t *freqs, unsigned i_nbSymbols, unsigned i_log2TotalFreq);
+    void exportCodeDistribution(std::vector<int16_t> &codes);
 
     ParCorGenerator pcg;
 };
