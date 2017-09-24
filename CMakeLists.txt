@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.6)
-project(Fingerprint)
+project(clac)
 
 set(SOURCES src/main.cpp
             src/encoder.cpp
@@ -28,7 +28,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
 include_directories(include include/rangeCoder include/wav)
 
-add_executable(audioZip ${SOURCES} ${HEADERS})
+add_executable(clac ${SOURCES} ${HEADERS})
 
-target_link_libraries(audioZip ${LIBVLC_LIBRARIES} "-lpthread")
+target_link_libraries(clac ${LIBVLC_LIBRARIES} "-lpthread")
 
