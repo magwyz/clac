@@ -1,5 +1,0 @@
-include
-include/rangeCoder
-include/wav
-src
-src/wav
