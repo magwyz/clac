@@ -49,25 +49,12 @@ int Encoder::getFrameCompressedData(std::vector<int16_t> &data, unsigned i_dataO
     const unsigned i_nbSymbols = i_codeMax - i_codeMin + 1;
     const unsigned i_log2TotalFreq = 19;
 
-    int16_t b = calculateBParameter(codes);
-
-    //exportCodeDistribution(codes);
-
-    Distribution dist(i_codeMin, i_codeMax, b, i_log2TotalFreq);
-    uint32_t *freqs = dist.getFreqs();
-
     RangeCoder* rc = (RangeCoder*)malloc(sizeof(RangeCoder));
-    QuasiStaticModel* qsm = createQuasiStaticModel(i_nbSymbols, i_log2TotalFreq,
-                                 1 << (i_log2TotalFreq - 1), freqs);
 
     startEncoding(rc, (unsigned char*)p_buffer);
 
     // Write the frame header.
     writeBits(rc, 16, 65534);
-
-    // Write the b parameter.
-    assert(b < (1 << 13));
-    writeBits(rc, 13, b);
 
     // Write the code min and max.
     assert(i_codeMin + (1 << 15) < (1 << 16));
@@ -108,20 +95,45 @@ int Encoder::getFrameCompressedData(std::vector<int16_t> &data, unsigned i_dataO
     else
         writeBits(rc, 1, 0);
 
-    for (unsigned i = 0; i < codes.size(); ++i)
-    {
-        unsigned i_freq, i_cumFreq;
 
-        const int32_t symb = codes[i] - i_codeMin;
-        assert(symb >= 0);
-        assert(symb < (int32_t)i_nbSymbols);
-        getSymbolFrequenciesQSM(qsm, symb, &i_freq, &i_cumFreq);
-        encodeFrequency(rc, i_log2TotalFreq, i_freq, i_cumFreq);
+    for (unsigned p = 0; p < 64; ++p)
+    {
+        size_t start = p * 64;
+        size_t end = std::min(codes.size(), (size_t)(p + 1) * 64);
+        std::vector<int16_t> partitionCodes(codes.begin() + start, codes.begin() + end);
+
+        int16_t b = (calculateBParameter(partitionCodes) / 256) * 256;
+        if (b < 256)
+            b = 256;
+
+        // Write the b parameter.
+        unsigned b_quantized = b / 256;
+        assert(b_quantized < (1 << 5));
+        writeBits(rc, 5, b_quantized);
+
+        Distribution dist(i_codeMin, i_codeMax, b, i_log2TotalFreq);
+        uint32_t *freqs = dist.getFreqs();
+
+        QuasiStaticModel* qsm = createQuasiStaticModel(i_nbSymbols, i_log2TotalFreq,
+                                     1 << (i_log2TotalFreq - 1), freqs);
+
+        for (unsigned i = 0; i < partitionCodes.size(); ++i)
+        {
+            unsigned i_freq, i_cumFreq;
+
+            const int32_t symb = partitionCodes[i] - i_codeMin;
+            assert(symb >= 0);
+            assert(symb < (int32_t)i_nbSymbols);
+            getSymbolFrequenciesQSM(qsm, symb, &i_freq, &i_cumFreq);
+            encodeFrequency(rc, i_log2TotalFreq, i_freq, i_cumFreq);
+        }
+
+        deleteQuasiStaticModel(qsm);
     }
 
     i_size = stopEncoding(rc);
 
-    deleteQuasiStaticModel(qsm);
+
     free(rc);
 
     return 0;
