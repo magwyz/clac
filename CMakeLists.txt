@@ -10,7 +10,8 @@ set(SOURCES src/main.cpp
             src/rangeCoder/staticModel.c
             src/rangeCoder/quasiStaticModel.c
             src/wav/wavreader.cpp
-            src/wav/wavwriter.cpp)
+            src/wav/wavwriter.cpp
+            src/mantissaexponent.cpp)
 
 set(HEADERS include/main.hpp
             include/encoder.h
@@ -22,7 +23,8 @@ set(HEADERS include/main.hpp
             include/rangeCoder/quasiStaticModel.h
             include/wav/wavreader.h
             include/wav/wavwriter.h
-            include/wav/wavparameters.h)
+            include/wav/wavparameters.h
+            include/mantissaexponent.h)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 

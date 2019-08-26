@@ -1,5 +1,6 @@
 
 #include <math.h>
+#include <assert.h>
 
 #include <distribution.h>
 
@@ -41,6 +42,7 @@ Distribution::Distribution(int i_codeMin, int i_codeMax, uint16_t b,
     }
 
     unsigned i_missingCount = i_totalFreq - sum2;
+    assert(i_missingCount <= i_nbSymbols);
     for (unsigned i = 0; i < i_missingCount; ++i)
         freqs[i]++;
 }

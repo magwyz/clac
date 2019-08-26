@@ -11,6 +11,7 @@
 #include <encoder.h>
 #include <codec.h>
 #include <distribution.h>
+#include <mantissaexponent.h>
 
 
 int Encoder::encodeFrame(std::vector<int16_t> &data, unsigned i_dataOffset, unsigned &i_selectedFrameSize,
@@ -21,8 +22,6 @@ int Encoder::encodeFrame(std::vector<int16_t> &data, unsigned i_dataOffset, unsi
 
     float compressionRate = (float)i_size / (i_selectedFrameSize * 2);
     std::cout << "Compression: " << compressionRate << std::endl;
-    if (compressionRate > 1)
-        exit(1);
 
     return 0;
 }
@@ -40,16 +39,27 @@ int Encoder::getFrameCompressedData(std::vector<int16_t> &data, unsigned i_dataO
     // TODO: Get this data from the previous function.
 
     // Find the min and max.
-    int64_t i_codeMin = std::floor(*std::min_element(codes.begin(), codes.end()) / 256.f) * 256;
-    int64_t i_codeMax = std::ceil(*std::max_element(codes.begin(), codes.end()) / 256.f) * 256;
+    int64_t i_codeMin = *std::min_element(codes.begin(), codes.end());
+    int64_t i_codeMax = *std::max_element(codes.begin(), codes.end());
 
-    if (i_codeMin == i_codeMax) // We must have at least two symbols for the range coder model.
-        i_codeMax = i_codeMin + 1;
+    unsigned codeMin_mantissa, codeMin_exponent;
+    unsigned codeMax_mantissa, codeMax_exponent;
+    assert(i_codeMin <= 0);
+    assert(i_codeMax > 0);
+    numberToMantissaExponent(-i_codeMin, NB_BITS_CODE_MIN_MAX_MANTISSA, NB_BITS_CODE_MIN_MAX_EXPONENT,
+                             codeMin_mantissa, codeMin_exponent);
+    i_codeMin = -(int64_t)mantissaExponentToNumber(codeMin_mantissa + 1, codeMin_exponent);
+    numberToMantissaExponent(i_codeMax, NB_BITS_CODE_MIN_MAX_MANTISSA, NB_BITS_CODE_MIN_MAX_EXPONENT,
+                             codeMax_mantissa, codeMax_exponent);
+    i_codeMax = mantissaExponentToNumber(codeMax_mantissa + 1, codeMax_exponent);
 
     const unsigned i_nbSymbols = i_codeMax - i_codeMin + 1;
     const unsigned i_log2TotalFreq = 19;
 
     int16_t b = calculateBParameter(codes);
+    unsigned b_mantissa, b_exponent;
+    b = numberToMantissaExponent(b, NB_BITS_B_MANTISSA, NB_BITS_B_EXPONENT,
+                                 b_mantissa, b_exponent);
 
     //exportCodeDistribution(codes);
 
@@ -66,14 +76,15 @@ int Encoder::getFrameCompressedData(std::vector<int16_t> &data, unsigned i_dataO
     writeBits(rc, 16, 65534);
 
     // Write the b parameter.
-    assert(b < (1 << 13));
-    writeBits(rc, 13, b);
+    writeBits(rc, NB_BITS_B_MANTISSA, b_mantissa);
+    writeBits(rc, NB_BITS_B_EXPONENT, b_exponent);
+
 
     // Write the code min and max.
-    assert(i_codeMin + (1 << 15) < (1 << 16));
-    writeBits(rc, 8, (i_codeMin + (1 << 15)) >> 8);
-    assert(i_codeMax + (1 << 15) < (1 << 16));
-    writeBits(rc, 8, (i_codeMax + (1 << 15)) >> 8);
+    writeBits(rc, NB_BITS_CODE_MIN_MAX_MANTISSA, codeMin_mantissa);
+    writeBits(rc, NB_BITS_CODE_MIN_MAX_EXPONENT, codeMin_exponent);
+    writeBits(rc, NB_BITS_CODE_MIN_MAX_MANTISSA, codeMax_mantissa);
+    writeBits(rc, NB_BITS_CODE_MIN_MAX_EXPONENT, codeMax_exponent);
 
     // Write the predictor order.
     writeBits(rc, 4, parCor.size() - 1);

@@ -5,6 +5,7 @@
 #include <parcorgenerator.h>
 #include <codec.h>
 #include <distribution.h>
+#include <mantissaexponent.h>
 
 
 int Decoder::decodeFrame(char *p_buffer, size_t &offset, std::vector<int16_t> &decodedFrameData)
@@ -22,10 +23,17 @@ int Decoder::decodeFrame(char *p_buffer, size_t &offset, std::vector<int16_t> &d
         return 1;
     }
 
-    int16_t b = readBits(rc, 13);
+    const unsigned b_mantissa = readBits(rc, NB_BITS_B_MANTISSA);
+    const unsigned b_exponent = readBits(rc, NB_BITS_B_EXPONENT);
+    int16_t b = mantissaExponentToNumber(b_mantissa, b_exponent);
 
-    const int i_codeMin = (int64_t)(readBits(rc, 8) << 8) - (1 << 15);
-    const int i_codeMax = (int64_t)(readBits(rc, 8) << 8) - (1 << 15);
+    const unsigned codeMin_mantissa = readBits(rc, NB_BITS_CODE_MIN_MAX_MANTISSA);
+    const unsigned codeMin_exponent = readBits(rc, NB_BITS_CODE_MIN_MAX_EXPONENT);
+    const unsigned codeMax_mantissa = readBits(rc, NB_BITS_CODE_MIN_MAX_MANTISSA);
+    const unsigned codeMax_exponent = readBits(rc, NB_BITS_CODE_MIN_MAX_EXPONENT);
+
+    const int64_t i_codeMin = -(int64_t)mantissaExponentToNumber(codeMin_mantissa + 1, codeMin_exponent);
+    const int64_t i_codeMax = mantissaExponentToNumber(codeMax_mantissa + 1, codeMax_exponent);
     const unsigned i_nbSymbols = i_codeMax - i_codeMin + 1;
 
     // Read the predictor order.

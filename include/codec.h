@@ -5,6 +5,11 @@ const unsigned frameSizes[] = {512, 768, 896, 1024, 1152, 1280, 1408, 1536, 1664
 const unsigned i_nbFrameSizes = sizeof(frameSizes) / sizeof(*frameSizes);
 
 
+#define NB_BITS_CODE_MIN_MAX_MANTISSA 4
+#define NB_BITS_CODE_MIN_MAX_EXPONENT 4
+#define NB_BITS_B_MANTISSA 4
+#define NB_BITS_B_EXPONENT 4
+
 static inline int getFrameSizeId(unsigned i_size)
 {
     int ret = -1;
