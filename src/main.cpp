@@ -147,6 +147,7 @@ int decode(std::string inPath, std::string outPath)
         int ret = dec.decodeFrame(p_buffer, offset, decodedFrameData);
         if (ret)
             abort();
+        i++;
     }
 
     WavWriter writer;
