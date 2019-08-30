@@ -99,15 +99,14 @@ int encode(std::string inPath, std::string outPath)
         enc.encodeFrame(ad, i_frameStart, i_frameSizeSelected, p_frameData, i_frameCompressedSize, b_refFrame);
         std::copy(p_frameData, p_frameData + i_frameCompressedSize, p_buffer + offset);
 
-        offset += i_frameCompressedSize;
-        i_nbFrames++;
-
-        std::cout << i_frameStart * 100.f / ad.size() << "%" << std::endl;
+        std::cout << i_frameStart * 100.f / ad.size() << "%" << " - frame: " << i_nbFrames << " sample: " << i_frameStart << std::endl;
 
         if (b_refFrame)
             i_lastRefFrame = i_frameStart;
 
         i_frameStart += i_frameSizeSelected;
+        offset += i_frameCompressedSize;
+        i_nbFrames++;
     }
 
     std::cout << "Total size: " << offset << std::endl;
