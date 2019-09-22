@@ -1,4 +1,4 @@
-
+﻿
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -14,11 +14,51 @@
 #include <mantissaexponent.h>
 
 
-int Encoder::encodeFrame(std::vector<int16_t> &data, unsigned i_dataOffset, unsigned &i_selectedFrameSize,
+Encoder::Encoder()
+{
+    // Add apodization functions
+
+    apodizations.emplace_back(new BrickWall());
+    apodizations.emplace_back(new Tuckey(0.1f));
+
+#if 0
+    {
+        float overlap = 0.1f;
+        float overlap_units = 1.0f/(1.0f - overlap) - 1.0f;
+        float tukey_p = 0.2f;
+        unsigned tukey_parts = 2;
+
+        for (unsigned m = 0; m < tukey_parts; m++){
+            float start = m / (tukey_parts + overlap_units);
+            float end = (m + 1 + overlap_units) / (tukey_parts + overlap_units);
+            apodizations.emplace_back(new PartialTuckey(tukey_p, start, end));
+        }
+    }
+
+    {
+        float overlap = 0.2f;
+        float overlap_units = 1.0f/(1.0f - overlap) - 1.0f;
+        float tukey_p = 0.2f;
+         unsigned tukey_parts = 3;
+
+        for (unsigned m = 0; m < tukey_parts; m++){
+            float start = m / (tukey_parts + overlap_units);
+            float end = (m + 1 + overlap_units) / (tukey_parts + overlap_units);
+            apodizations.emplace_back(new PunchoutTukey(tukey_p, start, end));
+        }
+    }
+#endif
+}
+
+
+int Encoder::encodeFrame(std::vector<int16_t> &data, unsigned i_dataOffset,
+                         unsigned &i_selectedFrameSize, unsigned i_selectedQuantization,
                          char *p_buffer, unsigned &i_size, bool b_refFrame)
 {
 
-    getFrameCompressedData(data, i_dataOffset, i_selectedFrameSize, p_buffer, i_size, b_refFrame);
+    getFrameCompressedData(data, i_dataOffset,
+                           i_selectedFrameSize, i_selectedQuantization,
+                           p_buffer, i_size, b_refFrame);
 
     float compressionRate = (float)i_size / (i_selectedFrameSize * 2);
     std::cout << "Compression: " << compressionRate << std::endl;
@@ -27,13 +67,16 @@ int Encoder::encodeFrame(std::vector<int16_t> &data, unsigned i_dataOffset, unsi
 }
 
 
-int Encoder::getFrameCompressedData(std::vector<int16_t> &data, unsigned i_dataOffset, unsigned &i_selectedFrameSize,
+int Encoder::getFrameCompressedData(std::vector<int16_t> &data, unsigned i_dataOffset,
+                                    unsigned &i_selectedFrameSize, unsigned i_selectedQuantization,
                                     char *p_buffer, unsigned &i_size, bool b_refFrame)
 {
     std::vector<int16_t> codes;
     std::vector<unsigned> parCor;
 
-    selectBestParameters(data, i_dataOffset, i_selectedFrameSize, codes, parCor, b_refFrame);
+    selectBestParameters(data, i_dataOffset,
+                         i_selectedFrameSize, i_selectedQuantization,
+                         codes, parCor, b_refFrame);
 
 
     // TODO: Get this data from the previous function.
@@ -99,13 +142,13 @@ int Encoder::getFrameCompressedData(std::vector<int16_t> &data, unsigned i_dataO
     {
         // Standard frame size.
         writeBits(rc, 1, 0);
-        assert(i_frameSizeId < 16);
-        writeBits(rc, 4, i_frameSizeId);
+        assert(i_frameSizeId < 4);
+        writeBits(rc, 2, i_frameSizeId);
     }
     else
     {
         // Custom frame size.
-        writeBits(rc, 1, 0);
+        writeBits(rc, 1, 1);
         assert(i_selectedFrameSize < (1 << 12));
         writeBits(rc, 11, i_selectedFrameSize);
     }
@@ -150,7 +193,8 @@ uint16_t Encoder::calculateBParameter(std::vector<int16_t> codes)
 }
 
 
-void Encoder::selectBestParameters(std::vector<int16_t> &data, unsigned i_dataOffset, unsigned &i_selectedFrameSize,
+void Encoder::selectBestParameters(std::vector<int16_t> &data, unsigned i_dataOffset,
+                                   unsigned &i_selectedFrameSize, unsigned &i_selectedQuantization,
                                    std::vector<int16_t> &predictions, std::vector<unsigned> &ParCor,
                                    bool b_refFrame)
 {
@@ -163,68 +207,89 @@ void Encoder::selectBestParameters(std::vector<int16_t> &data, unsigned i_dataOf
 
         for (unsigned order = 1; order <= 16; ++order)
         {
-            std::vector<int16_t> newPredictions;
 
-            std::vector<float> newLPCCoeff(order);
-            std::vector<unsigned> newParCor(order);
-
-            if (!b_refFrame)
-                pcg.calculateLPCcoeffs(data, i_dataOffset - order, i_frameSize + order, newLPCCoeff, newParCor);
-            else
-                pcg.calculateLPCcoeffs(data, i_dataOffset, i_frameSize, newLPCCoeff, newParCor);
-
-            float error = 0;
-
-            if (b_refFrame)
+            for (unsigned i_quantIndex = 0;
+                 i_quantIndex < sizeof(quantizations) / sizeof(*quantizations);
+                 ++i_quantIndex)
             {
-                if (i_frameSize > 1)
+                for (auto apodization = apodizations.begin();
+                     apodization != apodizations.end();
+                     ++apodization)
                 {
-                    int16_t predErr = data[i_dataOffset + 1] - data[i_dataOffset];
-                    newPredictions.push_back(predErr);
-                    error += predErr * predErr;
+                    unsigned i_quant = quantizations[i_quantIndex];
+
+                    std::vector<int16_t> newPredictions;
+
+                    std::vector<float> newLPCCoeff(order);
+                    std::vector<unsigned> newParCor(order);
+
+                    if (!b_refFrame)
+                        pcg.calculateLPCcoeffs(data, i_dataOffset - order,
+                                               i_frameSize + order, newLPCCoeff,
+                                               newParCor, i_quant, **apodization);
+                    else
+                        pcg.calculateLPCcoeffs(data, i_dataOffset,
+                                               i_frameSize, newLPCCoeff,
+                                               newParCor, i_quant, **apodization);
+
+                    float error = 0;
+
+                    if (b_refFrame)
+                    {
+                        if (i_frameSize > 1)
+                        {
+                            int16_t predErr = data[i_dataOffset + 1] - data[i_dataOffset];
+                            newPredictions.push_back(predErr);
+                            error += predErr * predErr;
+                        }
+
+                        for (unsigned i = 2; i < i_frameSize && i < newLPCCoeff.size(); ++i)
+                        {
+                            int16_t pred = 2 * data[i_dataOffset + i - 1] - data[i_dataOffset + i - 2];
+                            int16_t predErr = data[i_dataOffset + i] - pred;
+                            newPredictions.push_back(predErr);
+                            error += predErr * predErr;
+                        }
+                    }
+
+                    unsigned i_startLPCPred = b_refFrame ? order : 0;
+
+                    for (unsigned i = i_startLPCPred; i < i_frameSize; ++i)
+                    {
+                        int16_t pred = 0;
+                        for (unsigned j = 0; j < newLPCCoeff.size(); ++j)
+                            pred -= newLPCCoeff[j] * data[i_dataOffset + i - 1 - j];
+
+                        int16_t predErr = data[i_dataOffset + i] - pred;
+                        newPredictions.push_back(predErr);
+                        error += predErr * predErr;
+                    }
+
+                    error = 0.5f * std::log2(0.5f / i_frameSize * error) * i_frameSize / 8.f;
+                    error += ceilf(order * NB_QUANT_BITS / 8.f);
+                    error += 8;
+                    error /= i_frameSize;
+
+                    //if (i == 0 && order == 1 || i_sizePerSample < i_lastSizePerSample)
+                    if (i == 0 && order == 1 || error < i_lastSizePerSample)
+                    {
+                        predictions = newPredictions;
+                        ParCor = newParCor;
+                        //i_lastSizePerSample = i_sizePerSample;
+                        i_lastSizePerSample = error;
+                        i_lastOrder = order;
+                        i_selectedFrameSize = i_frameSize;
+                        i_selectedQuantization = i_quant;
+                    }
                 }
-
-                for (unsigned i = 2; i < i_frameSize && i < newLPCCoeff.size(); ++i)
-                {
-                    int16_t pred = 2 * data[i_dataOffset + i - 1] - data[i_dataOffset + i - 2];
-                    int16_t predErr = data[i_dataOffset + i] - pred;
-                    newPredictions.push_back(predErr);
-                    error += predErr * predErr;
-                }
-            }
-
-            unsigned i_startLPCPred = b_refFrame ? order : 0;
-
-            for (unsigned i = i_startLPCPred; i < i_frameSize; ++i)
-            {
-                int16_t pred = 0;
-                for (unsigned j = 0; j < newLPCCoeff.size(); ++j)
-                    pred -= newLPCCoeff[j] * data[i_dataOffset + i - 1 - j];
-
-                int16_t predErr = data[i_dataOffset + i] - pred;
-                newPredictions.push_back(predErr);
-                error += predErr * predErr;
-            }
-
-            error = 0.5f * std::log2(0.5f / i_frameSize * error) * i_frameSize / 8.f;
-            error += ceilf(order * NB_QUANT_BITS / 8.f);
-            error += 8;
-            error /= i_frameSize;
-
-            //if (i == 0 && order == 1 || i_sizePerSample < i_lastSizePerSample)
-            if (i == 0 && order == 1 || error < i_lastSizePerSample)
-            {
-                predictions = newPredictions;
-                ParCor = newParCor;
-                //i_lastSizePerSample = i_sizePerSample;
-                i_lastSizePerSample = error;
-                i_lastOrder = order;
-                i_selectedFrameSize = i_frameSize;
             }
         }
     }
 
-    std::cout << "Order: " << i_lastOrder << ", frame size: " << i_selectedFrameSize <<  ", size per sample: " << i_lastSizePerSample << std::endl;
+    std::cout << "Order: " << i_lastOrder
+              << ", frame size: " << i_selectedFrameSize
+              << ", quantization: " << i_selectedQuantization
+              <<  ", size per sample: " << i_lastSizePerSample << std::endl;
 }
 
 

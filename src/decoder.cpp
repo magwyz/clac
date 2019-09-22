@@ -39,18 +39,20 @@ int Decoder::decodeFrame(char *p_buffer, size_t &offset, std::vector<int16_t> &d
     // Read the predictor order.
     unsigned parCorSize = readBits(rc, 4) + 1;
 
+    unsigned i_quant = NB_QUANT_BITS;
+
     std::vector<unsigned> parCor(parCorSize);
             static int i_test = 0;
     for (unsigned i = 0; i < parCorSize; ++i)
-        parCor[i] = readBits(rc, NB_QUANT_BITS);
+        parCor[i] = readBits(rc, i_quant);
 
     // Get the frame size
     unsigned i_frameSize;
     unsigned customFrameSize = readBits(rc, 1);
     if (customFrameSize)
-        i_frameSize = readBits(rc, 15);
+        i_frameSize = readBits(rc, 11);
     else
-        i_frameSize = frameSizes[readBits(rc, 4)];
+        i_frameSize = frameSizes[readBits(rc, 2)];
 
     size_t firstDecodedValId = decodedFrameData.size();
 
@@ -69,7 +71,7 @@ int Decoder::decodeFrame(char *p_buffer, size_t &offset, std::vector<int16_t> &d
 
     // Get the coefs
     std::vector<float> coeffs;
-    pcg.getLPCcoeffsFromParCor(parCor, coeffs);
+    pcg.getLPCcoeffsFromParCor(parCor, coeffs, i_quant);
 
     QuasiStaticModel* qsm = createQuasiStaticModel(i_nbSymbols, i_log2TotalFreq,
                                  1 << (i_log2TotalFreq - 1), freqs);

@@ -24,7 +24,8 @@ set(HEADERS include/main.hpp
             include/wav/wavreader.h
             include/wav/wavwriter.h
             include/wav/wavparameters.h
-            include/mantissaexponent.h)
+            include/mantissaexponent.h
+            include/apodization.h)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 

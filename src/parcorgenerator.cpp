@@ -7,8 +7,16 @@
 
 
 void ParCorGenerator::calculateLPCcoeffs(std::vector<int16_t> &data, unsigned i_dataOffset, unsigned i_dataSize,
-                                         std::vector<float> &coeffs, std::vector<unsigned> &parCor)
+                                         std::vector<float> &coeffs, std::vector<unsigned> &parCor,
+                                         unsigned i_quant, Apodization &apodization)
 {
+    std::vector<float> window(i_dataSize);
+    apodization.generateWindow(window);
+
+    std::vector<float> windownedData(i_dataSize);
+    for(unsigned i = 0; i < i_dataSize; i++)
+        windownedData[i] = data[i + i_dataOffset] * window[i];
+
     // GET SIZE FROM INPUT VECTORS
     size_t N = i_dataSize - 1;
     size_t m = coeffs.size();
@@ -18,7 +26,7 @@ void ParCorGenerator::calculateLPCcoeffs(std::vector<int16_t> &data, unsigned i_
     for ( size_t i = 0; i <= m; i++ )
     {
         for ( size_t j = 0; j <= N - i; j++ )
-            R[ i ] += data[ i_dataOffset + j ] * data[ i_dataOffset + j + i];
+            R[ i ] += windownedData[ j ] * windownedData[ j + i ];
     }
 
 #if 0
@@ -47,11 +55,11 @@ void ParCorGenerator::calculateLPCcoeffs(std::vector<int16_t> &data, unsigned i_
         if (lambda > 1.f) lambda = 1.f;
         if (lambda < -1.f) lambda = -1.f;
 
-        parCor[k] = quantizeParCor(lambda, k + 1);
+        parCor[k] = quantizeParCor(lambda, k + 1, i_quant);
 
-        assert(parCor[k] < (1 << NB_QUANT_BITS));
+        assert(parCor[k] < (1 << i_quant));
 
-        lambda = getParCor(parCor[k], k + 1);
+        lambda = getParCor(parCor[k], k + 1, i_quant);
 
         // UPDATE Ak
         for ( size_t n = 0; n <= ( k + 1 ) / 2; n++ )
@@ -69,7 +77,7 @@ void ParCorGenerator::calculateLPCcoeffs(std::vector<int16_t> &data, unsigned i_
 }
 
 
-void ParCorGenerator::getLPCcoeffsFromParCor(std::vector<unsigned> &parCor, std::vector<float> &coeffs)
+void ParCorGenerator::getLPCcoeffsFromParCor(std::vector<unsigned> &parCor, std::vector<float> &coeffs, unsigned i_quant)
 {
     // GET SIZE FROM INPUT VECTORS
     size_t m = parCor.size();
@@ -82,7 +90,7 @@ void ParCorGenerator::getLPCcoeffsFromParCor(std::vector<unsigned> &parCor, std:
     for (size_t k = 0; k < m; k++)
     {
         // COMPUTE LAMBDA (PARCOR)
-        float lambda = getParCor(parCor[k], k + 1);
+        float lambda = getParCor(parCor[k], k + 1, i_quant);
 
         // UPDATE Ak
         for (size_t n = 0; n <= (k + 1) / 2; n++)
@@ -101,46 +109,46 @@ void ParCorGenerator::getLPCcoeffsFromParCor(std::vector<unsigned> &parCor, std:
 #define SQRT_2 1.414213562f
 
 
-unsigned ParCorGenerator::quantizeParCor(float parcor, unsigned i_order)
+unsigned ParCorGenerator::quantizeParCor(float parcor, unsigned i_order, unsigned i_quant)
 {
 #if 0
-    unsigned i_ret = std::roundf((parcor - (-QUANT_HALF_INTERVAL)) * (1 << NB_QUANT_BITS) / (2 * QUANT_HALF_INTERVAL));
+    unsigned i_ret = std::roundf((parcor - (-QUANT_HALF_INTERVAL)) * (1 << i_quant) / (2 * QUANT_HALF_INTERVAL));
 #else
     unsigned i_ret;
     switch (i_order)
     {
     case 1:
-        i_ret = (1 << (NB_QUANT_BITS - 1)) * SQRT_2 * sqrtf(parcor + 1.f);
+        i_ret = (1 << (i_quant - 1)) * SQRT_2 * sqrtf(parcor + 1.f);
         break;
     case 2:
-        i_ret = (1 << (NB_QUANT_BITS - 1)) * SQRT_2 * sqrtf(-parcor + 1.f);
+        i_ret = (1 << (i_quant - 1)) * SQRT_2 * sqrtf(-parcor + 1.f);
         break;
     default:
-        i_ret = (1 << (NB_QUANT_BITS - 1)) * (parcor + 1.f);
+        i_ret = (1 << (i_quant - 1)) * (parcor + 1.f);
         break;
     }
 #endif
-    i_ret = std::min(i_ret, (unsigned)(1 << NB_QUANT_BITS) - 1);
+    i_ret = std::min(i_ret, (unsigned)(1 << i_quant) - 1);
     return i_ret;
 }
 
 
-float ParCorGenerator::getParCor(int quantizedParCor, unsigned i_order)
+float ParCorGenerator::getParCor(int quantizedParCor, unsigned i_order, unsigned i_quant)
 {
 #if 0
-   float f_ret = quantizedParCor * (2 * QUANT_HALF_INTERVAL) / (1 << NB_QUANT_BITS) - QUANT_HALF_INTERVAL;
+   float f_ret = quantizedParCor * (2 * QUANT_HALF_INTERVAL) / (1 << i_quant) - QUANT_HALF_INTERVAL;
 #else
     float f_ret;
     switch (i_order)
     {
     case 1:
-        f_ret = std::pow((float)quantizedParCor / (1 << (NB_QUANT_BITS - 1)) / SQRT_2, 2.f) - 1.f;
+        f_ret = std::pow((float)quantizedParCor / (1 << (i_quant - 1)) / SQRT_2, 2.f) - 1.f;
         break;
     case 2:
-        f_ret = 1.f - std::pow((float)quantizedParCor / (1 << (NB_QUANT_BITS - 1)) / SQRT_2, 2.f);
+        f_ret = 1.f - std::pow((float)quantizedParCor / (1 << (i_quant - 1)) / SQRT_2, 2.f);
         break;
     default:
-        f_ret = (float)quantizedParCor / (1 << (NB_QUANT_BITS - 1)) - 1.f;
+        f_ret = (float)quantizedParCor / (1 << (i_quant - 1)) - 1.f;
         break;
     }
 #endif

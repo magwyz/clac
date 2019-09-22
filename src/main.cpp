@@ -93,10 +93,13 @@ int encode(std::string inPath, std::string outPath)
         char p_frameData[MAX_FRAME_SIZE] = {0};
         unsigned i_frameCompressedSize;
         unsigned i_frameSizeSelected;
+        unsigned i_selectedQuantization;
         bool b_refFrame = i_frameStart - i_lastRefFrame >= 48000
                           || i_frameStart == 0 ? true : false;
 
-        enc.encodeFrame(ad, i_frameStart, i_frameSizeSelected, p_frameData, i_frameCompressedSize, b_refFrame);
+        enc.encodeFrame(ad, i_frameStart,
+                        i_frameSizeSelected, i_selectedQuantization,
+                        p_frameData, i_frameCompressedSize, b_refFrame);
         std::copy(p_frameData, p_frameData + i_frameCompressedSize, p_buffer + offset);
 
         std::cout << i_frameStart * 100.f / ad.size() << "%" << " - frame: " << i_nbFrames << " sample: " << i_frameStart << std::endl;
