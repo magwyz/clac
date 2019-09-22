@@ -301,7 +301,7 @@ void Encoder::exportCodeDistribution(std::vector<int16_t> &codes)
 
     std::ofstream ofsFreq;
     std::stringstream ssFreq;
-    ssFreq << "distribution_" << dis_id << ".dat";
+    ssFreq << "distribution_" << dis_id << ".gp";
 
     std::map<int, unsigned> hist;
     for (unsigned i = 0; i < codes.size(); ++i)
@@ -309,9 +309,14 @@ void Encoder::exportCodeDistribution(std::vector<int16_t> &codes)
 
     ofsFreq.open(ssFreq.str());
 
+    ofsFreq << "plot '-' title 'PDF'" << std::endl;
+
     for (std::map<int, unsigned>::const_iterator it = hist.begin();
          it != hist.end(); ++it)
-        ofsFreq << it->first  << "," << it->second << std::endl;
+        ofsFreq << it->first  << " " << it->second << std::endl;
+
+    ofsFreq << "e" << std::endl
+            << "pause -1 'waiting...'" << std::endl;
 
     ofsFreq.close();
 
