@@ -16,15 +16,6 @@ public:
     bool readHeader(WavParameters &p);
     template<typename DataType> bool readAudioData(std::vector<DataType> &data)
     {
-        char format[4];
-        ifs.read(format, sizeof(format)); // format
-
-        if (std::string(format, 4) != std::string("data"))
-        {
-            ifs.close();
-            return false;
-        }
-
         u_int32_t i_size;
         ifs.read((char*)&i_size, sizeof(i_size)); // size
 

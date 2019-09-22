@@ -61,5 +61,17 @@ bool WavReader::readHeader(WavParameters& p)
 
     p = params;
 
+    while (ifs.good())
+    {
+        ifs.read(format, sizeof(format)); // format
+
+        if (std::string(format, 4) == std::string("data"))
+            break;
+
+        ifs.read((char*)&data32, sizeof(data32)); // Chunks size
+        std::streampos pos = ifs.tellg();
+        ifs.seekg(pos + (std::streampos)data32); // Skip the chunk
+    }
+
     return true;
 }
