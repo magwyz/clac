@@ -87,8 +87,12 @@ int Encoder::getFrameCompressedData(std::vector<int16_t> &data, unsigned i_dataO
 
     unsigned codeMin_mantissa, codeMin_exponent;
     unsigned codeMax_mantissa, codeMax_exponent;
-    assert(i_codeMin <= 0);
-    assert(i_codeMax > 0);
+
+    if (i_codeMin > 0)
+        i_codeMin = 0;
+    if (i_codeMax <= 0)
+        i_codeMax = 1;
+
     numberToMantissaExponent(-i_codeMin, NB_BITS_CODE_MIN_MAX_MANTISSA, NB_BITS_CODE_MIN_MAX_EXPONENT,
                              codeMin_mantissa, codeMin_exponent);
     i_codeMin = -(int64_t)mantissaExponentToNumber(codeMin_mantissa + 1, codeMin_exponent);
